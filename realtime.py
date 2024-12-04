@@ -2,10 +2,10 @@ import cv2
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
-from deepface import DeepFace
+from fer import FER
+from fer.utils import draw_annotations
 
-# Загрузка каскада классификатора для обнаружения лиц
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+detector = FER()
 
 def detect_and_display_emotions():
     # Начало захвата видео
@@ -22,31 +22,13 @@ def detect_and_display_emotions():
         if not ret:
             break
 
-        # Преобразование кадра в оттенки серого
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = cv2.flip(frame, 1)
+        emotions = detector.detect_emotions(frame)
+        frame = draw_annotations(frame, emotions)
 
-        # Преобразование серого кадра в RGB-формат
-        rgb_frame = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2RGB)
-
-        # Обнаружение лиц на кадре
-        faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-        for (x, y, w, h) in faces:
-            # Извлечение области интереса (ROI) лица
-            face_roi = rgb_frame[y:y + h, x:x + w]
-
-            # Анализ эмоций на области лица
-            result = DeepFace.analyze(face_roi, actions=['emotion'], enforce_detection=False)
-
-            # Сохраняем данные всех эмоций для каждого кадра
-            emotions_data.append(result[0]['emotion'])
-
-            # Определение доминирующей эмоции
-            emotion = result[0]['dominant_emotion']
-
-            # Рисование прямоугольника вокруг лица и отображение эмоции
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            cv2.putText(frame, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+        # Сохраняем данные эмоций, если они есть
+        if emotions:
+            emotions_data.append(emotions[0]['emotions'])
 
         # Отображение кадра с детекцией эмоций
         cv2.imshow('realtime', frame)  # Изменение названия окна
@@ -66,36 +48,35 @@ def detect_and_display_emotions():
 
     # Преобразование данных эмоций в DataFrame
     emotions_df = pd.DataFrame(emotions_data)
-    
-    # Заменяем английские названия эмоций на русские
-    emotions_df.columns = ['Злость', 'Отвращение', 'Страх', 'Счастье', 'Грусть', 'Удивление', 'Нейтральное']
 
-    # Применяем скользящее среднее для сглаживания
-    smoothed_emotions_df = emotions_df.rolling(window=5, min_periods=1).mean()
+    if not emotions_df.empty:
+        # Заменяем английские названия эмоций на русские
+        emotions_df.columns = ['Злость', 'Отвращение', 'Страх', 'Счастье', 'Грусть', 'Удивление', 'Нейтральное']
 
-    # Построение графика эмоций по времени
-    plt.figure(figsize=(12, 6))
-    for emotion in smoothed_emotions_df.columns:
-        plt.plot(smoothed_emotions_df.index, smoothed_emotions_df[emotion], label=emotion)
+        # Применяем скользящее среднее для сглаживания
+        smoothed_emotions_df = emotions_df.rolling(window=5, min_periods=1).mean()
 
-    plt.title("Изменение эмоций с течением времени")
-    plt.xlabel("Время (кадры)")
-    plt.ylabel("Интенсивность эмоции")
-    plt.legend()
+        # Построение графика эмоций по времени
+        plt.figure(figsize=(12, 6))
+        for emotion in smoothed_emotions_df.columns:
+            plt.plot(smoothed_emotions_df.index, smoothed_emotions_df[emotion], label=emotion)
 
-    # Сохранение графика
-    plot_path = os.path.join(output_dir, "emotion_timeline.png")
-    plt.savefig(plot_path)
+        plt.title("Изменение эмоций с течением времени")
+        plt.xlabel("Время (кадры)")
+        plt.ylabel("Интенсивность эмоции")
+        plt.legend()
 
-    # Суммарные значения эмоций за всё время с округлением до сотых
-    total_emotions = emotions_df.sum().round(2)  # Получаем сумму для каждой эмоции и округляем до сотых
-    total_emotions_df = pd.DataFrame({
-    'Человеческие эмоции': total_emotions.index, 
-    'Значение эмоций из видео': total_emotions.values
-    })
+        # Сохранение графика
+        plot_path = os.path.join(output_dir, "emotion_timeline.png")
+        plt.savefig(plot_path)
 
-    # Сохранение таблицы с суммарными эмоциями
-    table_path = os.path.join(output_dir, "total_emotion_data.html")
-    total_emotions_df.to_html(table_path, index=False, escape=False)
+        # Суммарные значения эмоций за всё время с округлением до сотых
+        total_emotions = emotions_df.sum().round(2)  # Получаем сумму для каждой эмоции и округляем до сотых
+        total_emotions_df = pd.DataFrame({
+            'Человеческие эмоции': total_emotions.index,
+            'Значение эмоций из видео': total_emotions.values
+        })
 
-
+        # Сохранение таблицы с суммарными эмоциями
+        table_path = os.path.join(output_dir, "total_emotion_data.html")
+        total_emotions_df.to_html(table_path, index=False, escape=False)
