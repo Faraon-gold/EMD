@@ -1,46 +1,46 @@
 import cv2
-import os
-import matplotlib.pyplot as plt
-import pandas as pd
 from fer import FER
 from fer.utils import draw_annotations
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+import config
 
 detector = FER()
 
 def detect_and_display_emotions():
-    # Начало захвата видео
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Не удалось открыть камеру!")
-        return
+    
+    cap = cv2.VideoCapture(0)  # Открываем камеру
 
     emotions_data = []  # Список для хранения данных эмоций
-
+    
     while True:
-        # Захват кадра
-        ret, frame = cap.read()
+        ret, frame = cap.read()  # Считываем кадры с камеры
         if not ret:
             break
-
-        frame = cv2.flip(frame, 1)
+        
+        # Детекция эмоций
         emotions = detector.detect_emotions(frame)
-        frame = draw_annotations(frame, emotions)
-
+        frame = draw_annotations(frame, emotions)  # Добавляем аннотации с эмоциями на кадр
+        
         # Сохраняем данные эмоций, если они есть
         if emotions:
             emotions_data.append(emotions[0]['emotions'])
-
-        # Отображение кадра с детекцией эмоций
-        cv2.imshow('realtime', frame)  # Изменение названия окна
-
-        # Обработчик закрытия окна: нажмите 'q' или закройте окно
-        if cv2.waitKey(1) & 0xFF == ord('q') or cv2.getWindowProperty('realtime', cv2.WND_PROP_VISIBLE) < 1:
+        
+        # Преобразуем кадр в формат JPEG
+        _, jpeg = cv2.imencode('.jpg', frame)
+        frame = jpeg.tobytes()
+        
+        if config.session_ended:
+            process_emotions_data(emotions_data)
             break
+        
+        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
-    # Освобождение захвата и закрытие всех окон
     cap.release()
-    cv2.destroyAllWindows()
 
+def process_emotions_data(emotions_data):
+    """Функция для обработки и сохранения данных о эмоциях (построение графиков и таблиц)."""
     # Сохранение данных эмоций и графика после завершения анализа
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')
     if not os.path.exists(output_dir):
@@ -68,7 +68,12 @@ def detect_and_display_emotions():
 
         # Сохранение графика
         plot_path = os.path.join(output_dir, "emotion_timeline.png")
-        plt.savefig(plot_path)
+        try:
+            plt.savefig(plot_path)
+            print(f"График сохранен по пути: {plot_path}")
+        except Exception as e:
+            print(f"Ошибка при сохранении графика: {e}")
+        plt.close()  # Закрыть график, чтобы освободить ресурсы
 
         # Суммарные значения эмоций за всё время с округлением до сотых
         total_emotions = emotions_df.sum().round(2)  # Получаем сумму для каждой эмоции и округляем до сотых
@@ -79,4 +84,10 @@ def detect_and_display_emotions():
 
         # Сохранение таблицы с суммарными эмоциями
         table_path = os.path.join(output_dir, "total_emotion_data.html")
-        total_emotions_df.to_html(table_path, index=False, escape=False)
+        try:
+            total_emotions_df.to_html(table_path, index=False, escape=False)
+            print(f"Таблица сохранена по пути: {table_path}")
+        except Exception as e:
+            print(f"Ошибка при сохранении таблицы: {e}")
+        
+        return plot_path, table_path

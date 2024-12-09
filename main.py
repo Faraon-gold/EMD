@@ -53,6 +53,8 @@ def process_file(file_path):
     # Сохранение видео
     output_file_name = f"{file_name}_output{file_extension}"
     path = os.path.join(output_dir, output_file_name)
+    output_file_name2 = f"{file_name}_output_audio{file_extension}"
+    path2 = os.path.join(output_dir, output_file_name2)
     
     clip=VideoFileClip(path)
     clip.ipython_display(width=560, maxduration=90)
@@ -66,3 +68,5 @@ def process_file(file_path):
     if os.path.exists(file_path):
         os.remove(file_path)
         os.remove(file_path2)
+    
+    return path2  # Возвращаем путь к обработанному видео

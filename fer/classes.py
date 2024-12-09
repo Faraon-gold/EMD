@@ -218,7 +218,7 @@ class Video(object):
         zip_images: bool = True,
         detection_box: Optional[dict] = None,
         lang: str = "en",
-        include_audio: bool = False,
+        include_audio: bool = True,
         size_multiplier: int = 1,
     ) -> list:
         """Recognize facial expressions in video using `detector`.
